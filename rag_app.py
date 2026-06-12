@@ -3,6 +3,7 @@ import sys
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from google import genai
 
 load_dotenv()
 
@@ -14,9 +15,26 @@ if not GEMINI_API_KEY:
     )
     sys.exit(1)
 
+genai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+GEMINI_TEST_PROMPT = "Explain what a large language model is in one paragraph."
+
 app = FastAPI()
+
+
+def test_gemini() -> str:
+    response = genai_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=GEMINI_TEST_PROMPT,
+    )
+    return response.text
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/test-gemini")
+def test_gemini_endpoint():
+    return {"response": test_gemini()}

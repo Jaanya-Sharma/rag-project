@@ -2,7 +2,7 @@
 
 This repository contains my Retrieval-Augmented Generation (RAG) project for the GenAI Secure Coding course.
 
-The project is built incrementally each week. The current milestone covers environment setup, API key validation, and a minimal FastAPI server.
+The project is built incrementally each week. The current milestone covers environment setup, API key validation, a minimal FastAPI server, and a basic Gemini connectivity test.
 
 ## Application (`rag_app.py`)
 
@@ -20,11 +20,15 @@ GEMINI_API_KEY=your_key_here
 
 `GEMINI_API_KEY` is read with `os.getenv("GEMINI_API_KEY")` after dotenv runs. If the key is missing or empty, the process prints a clear error to stderr and exits with code `1`. Uvicorn will not start without a valid key.
 
-The key is stored in the module variable `GEMINI_API_KEY` for use in later steps.
-
 ### Gemini configuration
 
-Gemini is **not** configured in code yet. `google-generativeai` is listed in `requirements.txt` but is not imported or called. There is no `genai.configure()`, model selection, or generation logic yet—only startup validation of the API key.
+The app uses the [`google-genai`](https://github.com/googleapis/python-genai) SDK. At startup, a client is created with the API key:
+
+```python
+genai_client = genai.Client(api_key=GEMINI_API_KEY)
+```
+
+Generation calls go through `genai_client.models.generate_content()`. There is no user input, document loading, chunking, embeddings, or retrieval yet.
 
 ### FastAPI app
 
@@ -42,15 +46,32 @@ uvicorn rag_app:app --reload
 
 ### Endpoints
 
-| Endpoint   | Method | Description                                      |
-| ---------- | ------ | ------------------------------------------------ |
-| `/health`  | GET    | Returns `{"status": "ok"}`. Liveness check only. |
+| Endpoint       | Method | Description |
+| -------------- | ------ | ----------- |
+| `/health`      | GET    | Returns `{"status": "ok"}`. Liveness check only. |
+| `/test-gemini` | GET    | Sends a hardcoded prompt to Gemini and returns the model response. See below. |
 
 Other paths (for example `/`) return `404 Not Found`.
 
-### Why Gemini calls are not implemented yet
+### What `/test-gemini` does
 
-This week’s scope is infrastructure: load secrets safely, fail fast on misconfiguration, and expose a health endpoint. Retrieval, prompting, and Gemini API calls will be added in later milestones as the RAG pipeline is built out.
+`GET /test-gemini` is a simple end-to-end test that confirms the Gemini API key and client work.
+
+1. The route calls `test_gemini()`, which uses the shared `genai_client`.
+2. It sends a **fixed prompt** (no user input):
+
+   > Explain what a large language model is in one paragraph.
+
+3. The request goes to the **`gemini-2.5-flash`** model via `generate_content()`.
+4. The endpoint returns JSON with the model’s text:
+
+   ```json
+   {"response": "...Gemini output..."}
+   ```
+
+Example: open `http://127.0.0.1:8000/test-gemini` in a browser while the server is running.
+
+If the Gemini API rejects the request (for example quota exceeded or an invalid key), the error is not handled in the route and the browser may show **500 Internal Server Error**. Check the Uvicorn terminal output for the underlying `google.genai.errors.ClientError`.
 
 ## Setup
 
