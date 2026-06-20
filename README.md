@@ -50,6 +50,7 @@ uvicorn rag_app:app --reload
 | -------------- | ------ | ----------- |
 | `/health`      | GET    | Returns `{"status": "ok"}`. Liveness check only. |
 | `/test-gemini` | GET    | Sends a hardcoded prompt to Gemini and returns the model response. See below. |
+| `/query`       | POST   | Accepts a user question, validates input/output, and uses Gemini to generate and review a final answer. |
 
 Other paths (for example `/`) return `404 Not Found`.
 
