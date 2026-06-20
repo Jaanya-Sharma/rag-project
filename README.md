@@ -55,23 +55,35 @@ Other paths (for example `/`) return `404 Not Found`.
 
 ### What `/test-gemini` does
 
-`GET /test-gemini` is a simple end-to-end test that confirms the Gemini API key and client work.
+`GET /test-gemini` now uses a two-step Gemini flow to generate a final answer from an intermediate output.
 
 1. The route calls `test_gemini()`, which uses the shared `genai_client`.
-2. It sends a **fixed prompt** (no user input):
+2. The first Gemini call sends a fixed prompt:
 
-   > Explain what a large language model is in one paragraph.
+   > Create a short 3-point outline explaining what a large language model is.
 
-3. The request goes to the **`gemini-2.5-flash`** model via `generate_content()`.
-4. The endpoint returns JSON with the model’s text:
+3. The first call captures the response as an intermediate value, logs that intermediate output safely, and does not expose it to the client.
+4. The second Gemini call uses the captured outline as input and asks the model to generate a refined paragraph based on that outline.
+5. The endpoint returns JSON with only the final model text:
 
    ```json
-   {"response": "...Gemini output..."}
+   {"response": "...refined Gemini output..."}
    ```
 
-Example: open `http://127.0.0.1:8000/test-gemini` in a browser while the server is running.
+Why the steps are separated
 
-If the Gemini API rejects the request (for example quota exceeded or an invalid key), the error is not handled in the route and the browser may show **500 Internal Server Error**. Check the Uvicorn terminal output for the underlying `google.genai.errors.ClientError`.
+- Separating the workflow into two steps makes it easier to inspect and validate the intermediate reasoning or structure before producing the final answer.
+- It supports a stronger multi-step generation pattern, where the first step produces a scaffold and the second step refines it.
+- It also creates a clearer place to add logging, validation, or retrieval logic in the future without immediately exposing intermediate content to the client.
+
+Challenges and open questions
+
+- The current implementation is still synchronous and blocking; an async client or worker thread may be needed for production FastAPI performance.
+- There is no retrieval step yet, so the flow is still only model-to-model generation rather than true RAG.
+- Sensitive or secret data should never be logged; the current logs only record that an intermediate result was captured, not the API key or request metadata.
+- If Gemini fails, the endpoint returns a clean 502 response instead of exposing raw exceptions or secret details.
+
+Example: open `http://127.0.0.1:8000/test-gemini` in a browser while the server is running.
 
 ## Setup
 
