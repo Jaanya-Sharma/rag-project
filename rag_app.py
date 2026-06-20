@@ -5,6 +5,7 @@ import sys
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from google import genai
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -28,6 +29,44 @@ OUTLINE_PROMPT = (
 
 app = FastAPI()
 
+class QueryRequest(BaseModel):
+    question: str
+
+def validate_user_input(text: str):
+    if text is None or text.strip() == "":
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    if len(text) < 5:
+        raise HTTPException(status_code=400, detail="Question is too short")
+
+    if len(text) > 500:
+        raise HTTPException(status_code=400, detail="Question is too long")
+
+def validate_model_output(text: str):
+    if text is None or text.strip() == "":
+        raise HTTPException(status_code=500, detail="AI returned an empty response")
+
+    if len(text) < 10:
+        raise HTTPException(status_code=500, detail="AI response is too short")
+
+def review_model_output(original_answer: str) -> str:
+    review_prompt = f"""
+You are reviewing an AI-generated response.
+
+Your job:
+- If the response is unclear, incomplete, or poorly written, improve it.
+- If the response is already good, return it unchanged.
+
+AI response to review:
+{original_answer}
+"""
+
+    review_response = genai_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=review_prompt,
+    )
+
+    return review_response.text
 
 def test_gemini() -> str:
     try:
@@ -65,3 +104,30 @@ def health() -> dict[str, str]:
 @app.get("/test-gemini")
 def test_gemini_endpoint() -> dict[str, str]:
     return {"response": test_gemini()}
+
+
+@app.post("/query")
+def query_ai(request: QueryRequest):
+    validate_user_input(request.question)
+
+    try:
+        primary_response = genai_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=request.question,
+        )
+    except Exception as exc:
+        logger.error("Gemini primary generation failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to generate a response from Gemini. Please try again later.",
+        )
+
+    raw_answer = primary_response.text
+    validate_model_output(raw_answer)
+
+    reviewed_answer = review_model_output(raw_answer)
+
+    return {
+        "question": request.question,
+        "answer": reviewed_answer
+    }

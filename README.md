@@ -72,16 +72,31 @@ Other paths (for example `/`) return `404 Not Found`.
 
 Why the steps are separated
 
-- Separating the workflow into two steps makes it easier to inspect and validate the intermediate reasoning or structure before producing the final answer.
-- It supports a stronger multi-step generation pattern, where the first step produces a scaffold and the second step refines it.
-- It also creates a clearer place to add logging, validation, or retrieval logic in the future without immediately exposing intermediate content to the client.
+- Separating the workflow into two steps makes it easier to inspect and validate the intermediate reasoning or structure before producing the final answer. For example, if the final paragraph is wrong, the developer can first verify whether the outline itself was incorrect, which narrows debugging to a specific stage.
+- It supports a stronger multi-step generation pattern, where the first step produces a scaffold and the second step refines it. This makes the architecture more modular and easier to extend with retrieval or fact-checking later.
+- It also creates a clearer place to add logging, validation, or retrieval logic in the future without immediately exposing intermediate content to the client. For instance, an intermediate outline could be used to select relevant documents or apply prompt correction before the second call.
+
+Why input validation exists
+
+- Input validation ensures the API receives a real question rather than empty, missing, or trivially short text.
+- This avoids wasted Gemini requests and gives the client fast, consistent feedback when the request is invalid.
+
+Why output validation exists
+
+- Output validation checks that the AI returned a usable response and helps catch empty, incomplete, or malformed results before they are sent back to the caller.
+- It prevents the endpoint from returning low-quality or meaningless answers as if they were valid.
+
+Why a second AI model is used to review responses
+
+- The review step lets the app improve or clean up the primary model output without exposing the raw intermediate answer directly.
+- It helps catch issues such as unclear phrasing, omission, or poor structure and produces a more polished final result.
 
 Challenges and open questions
 
-- The current implementation is still synchronous and blocking; an async client or worker thread may be needed for production FastAPI performance.
-- There is no retrieval step yet, so the flow is still only model-to-model generation rather than true RAG.
-- Sensitive or secret data should never be logged; the current logs only record that an intermediate result was captured, not the API key or request metadata.
-- If Gemini fails, the endpoint returns a clean 502 response instead of exposing raw exceptions or secret details.
+- The current implementation is still synchronous and blocking; an async client, background thread, or FastAPI dependency that runs I/O off the main thread may be needed for production performance.
+- There is no retrieval step yet, so the flow is still only model-to-model generation rather than true RAG. A next step would be to add document embedding, vector search, and prompt augmentation with retrieved context before the first or second Gemini call.
+- Sensitive or secret data should never be logged; the current logs only record that an intermediate result was captured, not the API key or request metadata. A safer approach is structured logging with redaction and environment-based log levels.
+- If Gemini fails, the endpoint returns a clean 502 response instead of exposing raw exceptions or secret details. Future work could include retry logic, more specific error mapping, and graceful fallback messaging for transient API issues.
 
 Example: open `http://127.0.0.1:8000/test-gemini` in a browser while the server is running.
 
